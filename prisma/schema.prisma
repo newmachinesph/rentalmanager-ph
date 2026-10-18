@@ -1,0 +1,414 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ===== Auth =====
+
+model User {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  password  String
+  role      String   @default("viewer")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ===== Core entities =====
+
+model Property {
+  id            String   @id @default(cuid())
+  name          String
+  type          String
+  address       String
+  city          String
+  province      String
+  zipCode       String
+  barangay      String
+  image         String?
+  monthlyTarget Float    @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  units               Unit[]
+  leases              Lease[]
+  incomeRecords       IncomeRecord[]
+  expenseRecords      ExpenseRecord[]
+  maintenanceRequests MaintenanceRequest[]
+  utilityReadings     UtilityReading[]
+  reminders           OrgReminder[]
+  orgMileage          OrgMileage[]
+  documents           PropertyDocument[]
+  contacts            PropertyContact[]
+  mileage             PropertyMileage[]
+  notes               PropertyNote[]
+
+  @@index([type])
+  @@index([createdAt])
+}
+
+model Unit {
+  id          String @id @default(cuid())
+  propertyId  String
+  name        String
+  floor       String?
+  bedrooms    Int    @default(0)
+  bathrooms   Int    @default(0)
+  areaSqm     Float  @default(0)
+  monthlyRent Float  @default(0)
+  status      String @default("Vacant")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  property            Property             @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  leases              Lease[]
+  incomeRecords       IncomeRecord[]
+  expenseRecords      ExpenseRecord[]
+  maintenanceRequests MaintenanceRequest[]
+  utilityReadings     UtilityReading[]
+
+  @@index([propertyId])
+  @@index([status])
+}
+
+model Tenant {
+  id               String   @id @default(cuid())
+  firstName        String
+  lastName         String
+  email            String
+  phone            String
+  emergencyContact String   @default("")
+  emergencyPhone   String   @default("")
+  idType           String   @default("")
+  idNumber         String   @default("")
+  occupation       String   @default("")
+  employer         String   @default("")
+  avatar           String?
+  notes            String   @default("")
+  dateOfBirth      String   @default("")
+  tenantType       String   @default("Person")
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  leases              Lease[]
+  incomeRecords       IncomeRecord[]
+  maintenanceRequests MaintenanceRequest[]
+
+  @@index([email])
+  @@index([lastName, firstName])
+  @@index([tenantType])
+  @@index([createdAt])
+}
+
+model Lease {
+  id              String   @id @default(cuid())
+  propertyId      String
+  unitId          String
+  tenantId        String
+  startDate       String
+  endDate         String
+  monthlyRent     Float
+  securityDeposit Float    @default(0)
+  advancePayment  Float    @default(0)
+  paymentDueDay   Int      @default(1)
+  status          String   @default("Active")
+  notes           String   @default("")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  property      Property       @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  unit          Unit           @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  tenant        Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  incomeRecords IncomeRecord[]
+  contracts     Contract[]
+
+  @@index([propertyId])
+  @@index([unitId])
+  @@index([tenantId])
+  @@index([status])
+  @@index([endDate])
+  @@index([createdAt])
+  @@index([unitId, status])
+  @@index([tenantId, propertyId, status])
+  @@index([propertyId, status])
+}
+
+model Contract {
+  id         String   @id @default(cuid())
+  leaseId    String
+  content    String
+  status     String   @default("Draft")
+  signedDate String?
+  notes      String   @default("")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  lease Lease @relation(fields: [leaseId], references: [id], onDelete: Cascade)
+
+  @@index([leaseId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model IncomeRecord {
+  id            String   @id @default(cuid())
+  propertyId    String
+  unitId        String?
+  tenantId      String?
+  leaseId       String?
+  category      String
+  amount        Float
+  dueDate       String
+  paidDate      String?
+  paymentMethod String?
+  status        String   @default("Pending")
+  referenceNo   String   @default("")
+  notes         String   @default("")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  property Property  @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  unit     Unit?     @relation(fields: [unitId], references: [id], onDelete: SetNull)
+  tenant   Tenant?   @relation(fields: [tenantId], references: [id], onDelete: SetNull)
+  lease    Lease?    @relation(fields: [leaseId], references: [id], onDelete: SetNull)
+
+  @@index([propertyId])
+  @@index([unitId])
+  @@index([tenantId])
+  @@index([leaseId])
+  @@index([status])
+  @@index([dueDate])
+  @@index([category])
+  @@index([createdAt])
+  @@index([status, dueDate])
+  @@index([propertyId, status])
+  @@index([status, paidDate])
+}
+
+model ExpenseRecord {
+  id          String   @id @default(cuid())
+  propertyId  String
+  unitId      String?
+  category    String
+  amount      Float
+  date        String
+  vendor      String   @default("")
+  description String   @default("")
+  receiptUrl  String?
+  notes       String   @default("")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  unit     Unit?    @relation(fields: [unitId], references: [id], onDelete: SetNull)
+
+  @@index([propertyId])
+  @@index([unitId])
+  @@index([category])
+  @@index([date])
+  @@index([createdAt])
+  @@index([vendor])
+  @@index([propertyId, category])
+  @@index([propertyId, date])
+}
+
+model MaintenanceRequest {
+  id              String   @id @default(cuid())
+  propertyId      String
+  unitId          String
+  tenantId        String?
+  title           String
+  description     String   @default("")
+  category        String
+  priority        String   @default("Medium")
+  status          String   @default("Open")
+  dateReported    String
+  dateCompleted   String?
+  estimatedCost   Float    @default(0)
+  actualCost      Float?
+  contractor      String   @default("")
+  contractorPhone String   @default("")
+  notes           String   @default("")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  unit     Unit     @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  tenant   Tenant?  @relation(fields: [tenantId], references: [id], onDelete: SetNull)
+
+  @@index([propertyId])
+  @@index([unitId])
+  @@index([tenantId])
+  @@index([status])
+  @@index([priority])
+  @@index([createdAt])
+  @@index([propertyId, status])
+  @@index([status, dateReported])
+}
+
+// ===== Organization-level entities =====
+
+model OrgReminder {
+  id          String   @id @default(cuid())
+  propertyId  String?
+  dateTime    String
+  category    String
+  notes       String   @default("")
+  isRecurring Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  property Property? @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@index([propertyId])
+  @@index([dateTime])
+}
+
+model OrgMileage {
+  id            String   @id @default(cuid())
+  propertyId    String?
+  date          String
+  startLocation String
+  endLocation   String
+  purpose       String   @default("")
+  distance      Float    @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  property Property? @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@index([propertyId])
+  @@index([date])
+}
+
+model OrgNote {
+  id        String   @id @default(cuid())
+  date      String
+  content   String   @default("")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([date])
+}
+
+model OrgDocument {
+  id           String @id @default(cuid())
+  name         String
+  url          String   @default("")
+  dateUploaded String
+  description  String @default("")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([dateUploaded])
+  @@index([createdAt])
+}
+
+// ===== Property sub-resources =====
+
+model PropertyDocument {
+  id           String @id @default(cuid())
+  propertyId   String
+  name         String
+  url          String   @default("")
+  dateUploaded String
+  description  String @default("")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@index([propertyId])
+  @@index([createdAt])
+}
+
+model PropertyContact {
+  id         String @id @default(cuid())
+  propertyId String
+  name       String
+  email      String @default("")
+  phone      String @default("")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@index([propertyId])
+}
+
+model PropertyMileage {
+  id            String   @id @default(cuid())
+  propertyId    String
+  date          String
+  startLocation String
+  endLocation   String
+  purpose       String   @default("")
+  distance      Float    @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@index([propertyId])
+  @@index([date])
+}
+
+model PropertyNote {
+  id         String   @id @default(cuid())
+  propertyId String
+  date       String
+  content    String   @default("")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@index([propertyId])
+  @@index([date])
+}
+
+// ===== Utility Readings =====
+
+model UtilityReading {
+  id              String   @id @default(cuid())
+  propertyId      String
+  unitId          String?
+  utilityType     String   // "Electricity" | "Water"
+  readingDate     String
+  previousReading Float    @default(0)
+  currentReading  Float    @default(0)
+  consumption     Float    @default(0)
+  ratePerUnit     Float    @default(0)
+  amount          Float    @default(0)
+  isPaid          Boolean  @default(false)
+  paidDate        String?
+  notes           String   @default("")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  unit     Unit?    @relation(fields: [unitId], references: [id], onDelete: SetNull)
+
+  @@index([propertyId])
+  @@index([unitId])
+  @@index([utilityType])
+  @@index([readingDate])
+  @@index([isPaid])
+  @@index([createdAt])
+  @@index([propertyId, utilityType])
+  @@index([propertyId, readingDate])
+}
+
+// ===== Settings =====
+
+model Setting {
+  key       String @id
+  value     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
